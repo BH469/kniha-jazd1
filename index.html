@@ -3,172 +3,195 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Kniha Jázd PRO</title>
+    <title>Kniha Jázd - Manuál</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { -webkit-tap-highlight-color: transparent; background-color: #0f172a; }
-        .active-pulse { animation: pulse 2s infinite; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        input::placeholder { color: #475569; }
     </style>
 </head>
 <body class="text-white font-sans min-h-screen p-4 pb-10">
 
     <div class="max-w-md mx-auto">
-        <!-- Status a Hlavička -->
-        <div class="flex justify-between items-center mb-6">
-            <h1 class="text-2xl font-black text-blue-400 tracking-tight">🚗 Kniha Jázd</h1>
-            <span id="statusBadge" class="text-[10px] bg-slate-800 border border-slate-700 px-3 py-1 rounded-full uppercase font-bold text-slate-400 tracking-widest">Pripravený</span>
+        <h1 class="text-2xl font-black text-blue-400 mb-6 flex justify-between items-center">
+            🚗 Kniha Jázd
+            <span id="statusBadge" class="text-[10px] bg-slate-800 border border-slate-700 px-3 py-1 rounded-full uppercase text-slate-400">Pripravený</span>
+        </h1>
+
+        <!-- SEKCIA NASTAVENIA (VYPĹŇA SA PRED JAZDOU) -->
+        <div id="setupSection" class="bg-slate-800/50 p-5 rounded-3xl mb-6 border border-slate-700 shadow-xl space-y-4">
+            <div class="grid grid-cols-2 gap-3">
+                <div class="col-span-2">
+                    <label class="text-[10px] text-slate-500 uppercase font-bold ml-1">EČV Vozidla</label>
+                    <input type="text" id="carPlate" placeholder="napr. BL123AB" class="w-full bg-slate-900 border-none rounded-xl p-3 text-white outline-none focus:ring-2 focus:ring-blue-500 uppercase">
+                </div>
+                <div>
+                    <label class="text-[10px] text-slate-500 uppercase font-bold ml-1">📍 Z miesta</label>
+                    <input type="text" id="fromPlace" placeholder="Bratislava" class="w-full bg-slate-900 border-none rounded-xl p-3 text-white outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="text-[10px] text-slate-500 uppercase font-bold ml-1">🏁 Do miesta</label>
+                    <input type="text" id="toPlace" placeholder="Košice" class="w-full bg-slate-900 border-none rounded-xl p-3 text-white outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="text-[10px] text-slate-500 uppercase font-bold ml-1">Stav tachometra</label>
+                    <input type="number" id="startOdo" placeholder="km pri štarte" class="w-full bg-slate-900 border-none rounded-xl p-3 text-white outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="text-[10px] text-orange-500 uppercase font-bold ml-1">⛽ Natankované (l)</label>
+                    <input type="number" id="refuel" placeholder="0" class="w-full bg-slate-900 border-none rounded-xl p-3 text-orange-400 outline-none focus:ring-2 focus:ring-orange-500">
+                </div>
+                <div>
+                    <label class="text-[10px] text-slate-500 uppercase font-bold ml-1">Spotreba (l/100)</label>
+                    <input type="number" id="avgCons" value="6.5" step="0.1" class="w-full bg-slate-900 border-none rounded-xl p-3 text-white outline-none">
+                </div>
+                <div>
+                    <label class="text-[10px] text-slate-500 uppercase font-bold ml-1">Cena PHM (€/l)</label>
+                    <input type="number" id="priceL" value="1.62" step="0.01" class="w-full bg-slate-900 border-none rounded-xl p-3 text-white outline-none">
+                </div>
+            </div>
+
+            <button id="startBtn" onclick="startTrip()" class="w-full bg-blue-600 hover:bg-blue-500 py-5 rounded-2xl font-black text-xl shadow-lg transition-all active:scale-95">
+                ŠTART JAZDY
+            </button>
         </div>
 
-        <!-- Hlavný displej -->
-        <div class="bg-gradient-to-br from-slate-800 to-slate-900 p-8 rounded-[2.5rem] shadow-2xl border border-slate-700 text-center mb-6 relative overflow-hidden">
-            <div id="timer" class="text-lg font-mono text-blue-400/70 mb-1">00:00:00</div>
-            <div id="distance" class="text-8xl font-black text-white leading-none tracking-tighter">0.0</div>
-            <div class="text-slate-500 mt-2 uppercase tracking-[0.3em] text-[10px] font-bold">Kilometre</div>
-            <div id="locationDisplay" class="mt-6 p-3 bg-black/20 rounded-2xl text-[11px] text-slate-400 italic min-h-[40px] flex items-center justify-center text-center">📍 Čakám na štart...</div>
+        <!-- SEKCIA JAZDY (ZOBRAZÍ SA PO ŠTARTE) -->
+        <div id="driveSection" class="hidden space-y-6">
+            <div class="bg-gradient-to-br from-blue-900/40 to-slate-900 p-10 rounded-[2.5rem] border border-blue-500/30 text-center shadow-2xl">
+                <div id="timer" class="text-2xl font-mono text-blue-400 mb-2 tracking-widest font-bold">00:00:00</div>
+                <div class="text-slate-400 text-xs uppercase tracking-widest">Jazda prebieha...</div>
+                <div id="activeInfo" class="mt-4 text-sm text-slate-300 italic"></div>
+            </div>
+
+            <div class="bg-slate-800/50 p-5 rounded-3xl border border-slate-700">
+                <label class="text-[10px] text-slate-500 uppercase font-bold ml-1">🏁 Cieľový stav tachometra (km)</label>
+                <input type="number" id="endOdo" placeholder="Zadaj km v cieli" class="w-full bg-slate-900 border-none rounded-xl p-4 text-white text-2xl font-bold outline-none focus:ring-2 focus:ring-red-500 mb-4">
+                
+                <button onclick="stopTrip()" class="w-full bg-red-600 hover:bg-red-500 py-6 rounded-2xl font-black text-xl shadow-lg active:scale-95 transition-all">
+                    STOP / ULOŽIŤ JAZDU
+                </button>
+            </div>
         </div>
 
-        <!-- Tlačidlá -->
-        <div class="grid grid-cols-1 gap-4 mb-8">
-            <button id="startBtn" onclick="startTrip()" class="bg-blue-600 hover:bg-blue-500 py-6 rounded-[1.5rem] font-black text-xl shadow-lg active:scale-95 transition-all">▶ ZAČAŤ JAZDU</button>
-            <button id="stopBtn" onclick="stopTrip()" class="hidden bg-red-600 hover:bg-red-500 py-6 rounded-[1.5rem] font-black text-xl shadow-lg active:scale-95 transition-all active-pulse">🛑 KONIEC JAZDY</button>
+        <!-- EXPORT A HISTÓRIA -->
+        <div class="flex gap-2 mb-6">
+            <button onclick="exportCSV()" class="flex-1 bg-slate-700 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest">📥 Export CSV</button>
+            <button onclick="clearLogs()" class="bg-slate-800 py-3 px-4 rounded-xl text-[10px] text-red-500 font-bold uppercase">Zmazať</button>
         </div>
 
-        <!-- Akcie a História -->
-        <div class="flex gap-3 mb-10">
-            <button onclick="exportToCSV()" class="flex-1 bg-slate-700 hover:bg-slate-600 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest">📥 Export CSV</button>
-            <button onclick="clearLogs()" class="bg-slate-800 hover:bg-red-900/40 border border-slate-700 py-3 px-6 rounded-xl text-[10px] text-red-500 font-bold uppercase">Zmazať</button>
-        </div>
-
-        <div id="historyList" class="space-y-3">
-             <h3 class="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mb-4 px-1">História</h3>
-        </div>
+        <div id="historyList" class="space-y-3"></div>
     </div>
 
     <script>
-        let watchId = null, startTime = null, timerInterval = null, totalDistance = 0, lastCoords = null;
-        let startAddress = "Neznáme", endAddress = "Neznáme";
+        let startTime = null, timerInterval = null;
         let tripHistory = JSON.parse(localStorage.getItem('tripHistory')) || [];
-
-        // --- VYLEPŠENÁ FUNKCIA PRE IPHONE (OBCHÁDZA BLOKOVANIE) ---
-        async function fetchCity(lat, lon) {
-            try {
-                // Nominatim vyžaduje unikátny User-Agent, inak Safari vráti chybu
-                const url = `https://nominatim.openstreetmap.org{lat}&lon=${lon}&zoom=14&addressdetails=1&accept-language=sk`;
-                const response = await fetch(url, {
-                    headers: { 'User-Agent': 'MojaKnihaJazd_App_User_' + Math.floor(Math.random()*1000) }
-                });
-                const data = await response.json();
-                
-                if (data && data.address) {
-                    const addr = data.address;
-                    const place = addr.city || addr.town || addr.village || addr.municipality || addr.suburb || "Neznáma lokalita";
-                    const road = addr.road ? addr.road + ", " : "";
-                    return road + place;
-                }
-                return `${lat.toFixed(3)}, ${lon.toFixed(3)}`;
-            } catch (e) {
-                return `${lat.toFixed(3)}, ${lon.toFixed(3)}`;
-            }
-        }
 
         function updateTimer() {
             const diff = new Date(new Date() - startTime);
             document.getElementById('timer').innerText = diff.toISOString().substr(11, 8);
         }
 
-        function getDist(lat1, lon1, lat2, lon2) {
-            const R = 6371;
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
-            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        }
+        function startTrip() {
+            const plate = document.getElementById('carPlate').value;
+            const from = document.getElementById('fromPlace').value;
+            const startKm = document.getElementById('startOdo').value;
 
-        async function startTrip() {
-            if (!navigator.geolocation) return alert("Povoľte GPS v nastaveniach.");
-            
-            startTime = new Date();
-            totalDistance = 0; lastCoords = null;
-            document.getElementById('distance').innerText = "0.0";
-            document.getElementById('locationDisplay').innerText = "📍 Vyhľadávam polohu...";
-            
-            toggleUI(true);
-            timerInterval = setInterval(updateTimer, 1000);
-
-            navigator.geolocation.getCurrentPosition(async p => {
-                const lat = p.coords.latitude;
-                const lon = p.coords.longitude;
-                startAddress = await fetchCity(lat, lon);
-                document.getElementById('locationDisplay').innerText = "Odchod: " + startAddress;
-                lastCoords = { lat, lon };
-            }, err => {
-                document.getElementById('locationDisplay').innerText = "📍 Chyba GPS: " + err.message;
-            }, { enableHighAccuracy: true });
-
-            watchId = navigator.geolocation.watchPosition(p => {
-                if (lastCoords) {
-                    const d = getDist(lastCoords.lat, lastCoords.lon, p.coords.latitude, p.coords.longitude);
-                    if (d > 0.008) { 
-                        totalDistance += d;
-                        document.getElementById('distance').innerText = totalDistance.toFixed(2);
-                    }
-                }
-                lastCoords = { lat: p.coords.latitude, lon: p.coords.longitude };
-            }, null, { enableHighAccuracy: true });
-        }
-
-        async function stopTrip() {
-            clearInterval(timerInterval);
-            navigator.geolocation.clearWatch(watchId);
-            
-            document.getElementById('locationDisplay').innerText = "📍 Lokalizujem cieľ...";
-            if (lastCoords) {
-                endAddress = await fetchCity(lastCoords.lat, lastCoords.lon);
+            if (!plate || !from || !startKm) {
+                alert("Prosím vyplň EČV, Miesto štartu a Tachometer!");
+                return;
             }
 
-            tripHistory.push({
-                date: new Date().toLocaleString('sk-SK'),
-                from: startAddress,
-                to: endAddress,
-                km: totalDistance.toFixed(2),
-                time: document.getElementById('timer').innerText
-            });
+            startTime = new Date();
+            timerInterval = setInterval(updateTimer, 1000);
 
-            localStorage.setItem('tripHistory', JSON.stringify(tripHistory));
-            renderHistory();
-            toggleUI(false);
-            document.getElementById('locationDisplay').innerText = "Cieľ: " + endAddress;
+            document.getElementById('setupSection').classList.add('hidden');
+            document.getElementById('driveSection').classList.remove('hidden');
+            document.getElementById('statusBadge').innerText = "V pohybe";
+            document.getElementById('statusBadge').classList.replace('text-slate-400', 'text-green-400');
+            document.getElementById('activeInfo').innerText = `${plate} | Z: ${from}`;
         }
 
-        function toggleUI(on) {
-            document.getElementById('startBtn').classList.toggle('hidden', on);
-            document.getElementById('stopBtn').classList.toggle('hidden', !on);
-            document.getElementById('statusBadge').innerText = on ? "V pohybe" : "Pripravený";
+        function stopTrip() {
+            const endKm = parseFloat(document.getElementById('endOdo').value);
+            const startKm = parseFloat(document.getElementById('startOdo').value);
+
+            if (!endKm || endKm <= startKm) {
+                alert("Cieľové km musia byť vyššie ako počiatočné!");
+                return;
+            }
+
+            clearInterval(timerInterval);
+            
+            const dist = endKm - startKm;
+            const cons = parseFloat(document.getElementById('avgCons').value);
+            const price = parseFloat(document.getElementById('priceL').value);
+            const fuelUsed = (dist * (cons / 100)).toFixed(2);
+            const cost = (fuelUsed * price).toFixed(2);
+
+            const record = {
+                plate: document.getElementById('carPlate').value.toUpperCase(),
+                date: new Date().toLocaleString('sk-SK'),
+                from: document.getElementById('fromPlace').value,
+                to: document.getElementById('toPlace').value || "Neznáme",
+                startKm: startKm,
+                endKm: endKm,
+                dist: dist.toFixed(1),
+                duration: document.getElementById('timer').innerText,
+                refueled: document.getElementById('refuel').value || "0",
+                fuelUsed: fuelUsed,
+                cost: cost
+            };
+
+            tripHistory.push(record);
+            localStorage.setItem('tripHistory', JSON.stringify(tripHistory));
+
+            // Reset UI
+            document.getElementById('driveSection').classList.add('hidden');
+            document.getElementById('setupSection').classList.remove('hidden');
+            document.getElementById('statusBadge').innerText = "Pripravený";
+            document.getElementById('endOdo').value = "";
+            document.getElementById('startOdo').value = endKm; // Predvyplníme nové km pre ďalšiu jazdu
+            
+            renderHistory();
         }
 
         function renderHistory() {
             const container = document.getElementById('historyList');
-            container.innerHTML = '<h3 class="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mb-4 px-1">História</h3>';
-            tripHistory.slice().reverse().slice(0, 10).forEach(item => {
+            container.innerHTML = '<h3 class="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mb-4">Posledné záznamy</h3>';
+            tripHistory.slice().reverse().forEach(item => {
                 const div = document.createElement('div');
-                div.className = "bg-slate-800/40 p-3 rounded-xl border border-slate-700/50 text-[10px] mb-2";
-                div.innerHTML = `<b>${item.date}</b> | ${item.km} km<br><span class="opacity-60">Z: ${item.from}<br>Do: ${item.to}</span>`;
+                div.className = "bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50 text-[11px] mb-2";
+                div.innerHTML = `
+                    <div class="flex justify-between font-bold text-blue-400 mb-1">
+                        <span>${item.plate} | ${item.date}</span>
+                        <span>${item.dist} km</span>
+                    </div>
+                    <div class="text-slate-300">Z: ${item.from} → Do: ${item.to}</div>
+                    <div class="flex justify-between mt-2 text-[10px] text-slate-500 font-bold uppercase">
+                        <span>Odo: ${item.startKm}-${item.endKm}</span>
+                        <span>Spotreba: ${item.fuelUsed}l (${item.cost}€)</span>
+                    </div>
+                `;
                 container.appendChild(div);
             });
         }
 
-        function exportToCSV() {
-            let csv = "Datum;Z_Mesta;Do_Mesta;Vzdialenost_km;Trvanie\n";
-            tripHistory.forEach(r => csv += `"${r.date}";"${r.from}";"${r.to}";${r.km};${r.time}\n`);
+        function exportCSV() {
+            if (tripHistory.length === 0) return;
+            let csv = "ECV;Datum;Z;Do;Start_KM;Koniec_KM;Vzdialenost;Trvanie;Natankovane_L;Spotrebovane_L;Naklady_EUR\n";
+            tripHistory.forEach(r => {
+                csv += `"${r.plate}";"${r.date}";"${r.from}";"${r.to}";${r.startKm};${r.endKm};${r.dist};${r.duration};${r.refueled};${r.fuelUsed};${r.cost}\n`;
+            });
             const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
-            link.download = `kniha_jazd_export.csv`;
+            link.download = `kniha_jazd_${document.getElementById('carPlate').value}.csv`;
             link.click();
         }
 
-        function clearLogs() { if(confirm("Vymazať?")) { tripHistory = []; localStorage.removeItem('tripHistory'); renderHistory(); } }
+        function clearLogs() { if(confirm("Zmazať všetko?")) { tripHistory = []; localStorage.removeItem('tripHistory'); renderHistory(); } }
+
         renderHistory();
     </script>
 </body>
