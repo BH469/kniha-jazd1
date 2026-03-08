@@ -14,75 +14,61 @@
 <body class="text-white font-sans min-h-screen p-4 pb-10">
 
     <div class="max-w-md mx-auto">
+        <!-- Status a Hlavička -->
         <div class="flex justify-between items-center mb-6">
             <h1 class="text-2xl font-black text-blue-400 tracking-tight">🚗 Kniha Jázd</h1>
-            <span id="statusBadge" class="text-[10px] bg-slate-800 border border-slate-700 px-3 py-1 rounded-full uppercase font-bold text-slate-400">Pripravený</span>
+            <span id="statusBadge" class="text-[10px] bg-slate-800 border border-slate-700 px-3 py-1 rounded-full uppercase font-bold text-slate-400 tracking-widest">Pripravený</span>
         </div>
 
-        <!-- Displej -->
+        <!-- Hlavný displej -->
         <div class="bg-gradient-to-br from-slate-800 to-slate-900 p-8 rounded-[2.5rem] shadow-2xl border border-slate-700 text-center mb-6 relative overflow-hidden">
             <div id="timer" class="text-lg font-mono text-blue-400/70 mb-1">00:00:00</div>
             <div id="distance" class="text-8xl font-black text-white leading-none tracking-tighter">0.0</div>
             <div class="text-slate-500 mt-2 uppercase tracking-[0.3em] text-[10px] font-bold">Kilometre</div>
-            
-            <div id="locationDisplay" class="mt-6 p-3 bg-black/20 rounded-2xl text-[11px] text-slate-300 italic min-h-[40px] flex items-center justify-center text-center">
-               📍 Čakám na štart...
-            </div>
+            <div id="locationDisplay" class="mt-6 p-3 bg-black/20 rounded-2xl text-[11px] text-slate-400 italic min-h-[40px] flex items-center justify-center text-center">📍 Čakám na štart...</div>
         </div>
 
+        <!-- Tlačidlá -->
         <div class="grid grid-cols-1 gap-4 mb-8">
             <button id="startBtn" onclick="startTrip()" class="bg-blue-600 hover:bg-blue-500 py-6 rounded-[1.5rem] font-black text-xl shadow-lg active:scale-95 transition-all">▶ ZAČAŤ JAZDU</button>
             <button id="stopBtn" onclick="stopTrip()" class="hidden bg-red-600 hover:bg-red-500 py-6 rounded-[1.5rem] font-black text-xl shadow-lg active:scale-95 transition-all active-pulse">🛑 KONIEC JAZDY</button>
         </div>
 
-        <!-- Nastavenia pre export -->
-        <div class="bg-slate-800/50 p-4 rounded-2xl mb-6 border border-slate-700 text-xs">
-            <div class="grid grid-cols-2 gap-3">
-                <input type="number" id="avgConsumption" value="6.5" step="0.1" class="bg-slate-900 p-2 rounded-lg text-white outline-none" placeholder="Spotreba">
-                <input type="number" id="fuelPrice" value="1.62" step="0.01" class="bg-slate-900 p-2 rounded-lg text-white outline-none" placeholder="Cena PHM">
-            </div>
+        <!-- Akcie a História -->
+        <div class="flex gap-3 mb-10">
+            <button onclick="exportToCSV()" class="flex-1 bg-slate-700 hover:bg-slate-600 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest">📥 Export CSV</button>
+            <button onclick="clearLogs()" class="bg-slate-800 hover:bg-red-900/40 border border-slate-700 py-3 px-6 rounded-xl text-[10px] text-red-500 font-bold uppercase">Zmazať</button>
         </div>
 
-        <div class="flex gap-3 mb-10 text-[10px]">
-            <button onclick="exportToCSV()" class="flex-1 bg-slate-700 py-3 rounded-xl font-bold uppercase tracking-widest">📥 Export CSV</button>
-            <button onclick="clearLogs()" class="bg-slate-800 py-3 px-6 rounded-xl text-red-500 font-bold uppercase">Zmazať</button>
+        <div id="historyList" class="space-y-3">
+             <h3 class="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mb-4 px-1">História</h3>
         </div>
-
-        <div id="historyList" class="space-y-3"></div>
     </div>
 
     <script>
         let watchId = null, startTime = null, timerInterval = null, totalDistance = 0, lastCoords = null;
+        let startAddress = "Neznáme", endAddress = "Neznáme";
         let tripHistory = JSON.parse(localStorage.getItem('tripHistory')) || [];
 
-        // --- OPRAVENÁ FUNKCIA PRE IPHONE ---
+        // --- VYLEPŠENÁ FUNKCIA PRE IPHONE (OBCHÁDZA BLOKOVANIE) ---
         async function fetchCity(lat, lon) {
             try {
-                // Skúsime Nominatim s dlhším timeoutom a slovenskou lokalizáciou
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 sekúnd timeout
-
+                // Nominatim vyžaduje unikátny User-Agent, inak Safari vráti chybu
                 const url = `https://nominatim.openstreetmap.org{lat}&lon=${lon}&zoom=14&addressdetails=1&accept-language=sk`;
-                
-                const res = await fetch(url, { 
-                    signal: controller.signal,
-                    headers: { 'User-Agent': 'KnihaJazd_Mobile_App_' + Date.now() }
+                const response = await fetch(url, {
+                    headers: { 'User-Agent': 'MojaKnihaJazd_App_User_' + Math.floor(Math.random()*1000) }
                 });
+                const data = await response.json();
                 
-                const data = await res.json();
-                clearTimeout(timeoutId);
-
                 if (data && data.address) {
-                    const a = data.address;
-                    // Vrátime mesto, obec alebo ulicu
-                    const city = a.city || a.town || a.village || a.municipality || a.hamlet || a.suburb;
-                    const road = a.road || "";
-                    if (city) return road ? `${road}, ${city}` : city;
+                    const addr = data.address;
+                    const place = addr.city || addr.town || addr.village || addr.municipality || addr.suburb || "Neznáma lokalita";
+                    const road = addr.road ? addr.road + ", " : "";
+                    return road + place;
                 }
-                return `Pozícia: ${lat.toFixed(3)}, ${lon.toFixed(3)}`;
+                return `${lat.toFixed(3)}, ${lon.toFixed(3)}`;
             } catch (e) {
-                console.log("Internet/API error", e);
-                return `Súradnice: ${lat.toFixed(3)}, ${lon.toFixed(3)}`;
+                return `${lat.toFixed(3)}, ${lon.toFixed(3)}`;
             }
         }
 
@@ -99,29 +85,34 @@
             return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         }
 
-        function startTrip() {
-            if (!navigator.geolocation) return alert("Zapnite si GPS.");
+        async function startTrip() {
+            if (!navigator.geolocation) return alert("Povoľte GPS v nastaveniach.");
             
             startTime = new Date();
             totalDistance = 0; lastCoords = null;
             document.getElementById('distance').innerText = "0.0";
-            document.getElementById('locationDisplay').innerText = "📍 Hľadám názov miesta...";
+            document.getElementById('locationDisplay').innerText = "📍 Vyhľadávam polohu...";
             
             toggleUI(true);
             timerInterval = setInterval(updateTimer, 1000);
 
             navigator.geolocation.getCurrentPosition(async p => {
-                const city = await fetchCity(p.coords.latitude, p.coords.longitude);
-                document.getElementById('locationDisplay').innerText = "Odchod: " + city;
-                window.currentStartAddr = city; // Uložíme si pre históriu
-            }, (err) => {
-                document.getElementById('locationDisplay').innerText = "📍 Povolenie GPS zamietnuté.";
+                const lat = p.coords.latitude;
+                const lon = p.coords.longitude;
+                startAddress = await fetchCity(lat, lon);
+                document.getElementById('locationDisplay').innerText = "Odchod: " + startAddress;
+                lastCoords = { lat, lon };
+            }, err => {
+                document.getElementById('locationDisplay').innerText = "📍 Chyba GPS: " + err.message;
             }, { enableHighAccuracy: true });
 
             watchId = navigator.geolocation.watchPosition(p => {
                 if (lastCoords) {
                     const d = getDist(lastCoords.lat, lastCoords.lon, p.coords.latitude, p.coords.longitude);
-                    if (d > 0.01) { totalDistance += d; document.getElementById('distance').innerText = totalDistance.toFixed(2); }
+                    if (d > 0.008) { 
+                        totalDistance += d;
+                        document.getElementById('distance').innerText = totalDistance.toFixed(2);
+                    }
                 }
                 lastCoords = { lat: p.coords.latitude, lon: p.coords.longitude };
             }, null, { enableHighAccuracy: true });
@@ -131,29 +122,23 @@
             clearInterval(timerInterval);
             navigator.geolocation.clearWatch(watchId);
             
-            let endCity = "Neznáme";
+            document.getElementById('locationDisplay').innerText = "📍 Lokalizujem cieľ...";
             if (lastCoords) {
-                document.getElementById('locationDisplay').innerText = "📍 Hľadám cieľ...";
-                endCity = await fetchCity(lastCoords.lat, lastCoords.lon);
+                endAddress = await fetchCity(lastCoords.lat, lastCoords.lon);
             }
-
-            const consumption = parseFloat(document.getElementById('avgConsumption').value) || 6.5;
-            const price = parseFloat(document.getElementById('fuelPrice').value) || 1.62;
-            const cost = (totalDistance * (consumption / 100) * price).toFixed(2);
 
             tripHistory.push({
                 date: new Date().toLocaleString('sk-SK'),
-                from: window.currentStartAddr || "Neznáme",
-                to: endCity,
+                from: startAddress,
+                to: endAddress,
                 km: totalDistance.toFixed(2),
-                time: document.getElementById('timer').innerText,
-                cost: cost
+                time: document.getElementById('timer').innerText
             });
 
             localStorage.setItem('tripHistory', JSON.stringify(tripHistory));
             renderHistory();
             toggleUI(false);
-            document.getElementById('locationDisplay').innerText = "Cieľ: " + endCity;
+            document.getElementById('locationDisplay').innerText = "Cieľ: " + endAddress;
         }
 
         function toggleUI(on) {
@@ -164,24 +149,26 @@
 
         function renderHistory() {
             const container = document.getElementById('historyList');
-            container.innerHTML = "";
+            container.innerHTML = '<h3 class="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mb-4 px-1">História</h3>';
             tripHistory.slice().reverse().slice(0, 10).forEach(item => {
                 const div = document.createElement('div');
                 div.className = "bg-slate-800/40 p-3 rounded-xl border border-slate-700/50 text-[10px] mb-2";
-                div.innerHTML = `<b>${item.date}</b> | ${item.km} km | ${item.cost} €<br><span class="opacity-60">Z: ${item.from}<br>Do: ${item.to}</span>`;
+                div.innerHTML = `<b>${item.date}</b> | ${item.km} km<br><span class="opacity-60">Z: ${item.from}<br>Do: ${item.to}</span>`;
                 container.appendChild(div);
             });
         }
+
         function exportToCSV() {
-            let csv = "Datum;Z;Do;km;Cas;Cena\n";
-            tripHistory.forEach(r => csv += `"${r.date}";"${r.from}";"${r.to}";${r.km};${r.time};${r.cost}\n`);
+            let csv = "Datum;Z_Mesta;Do_Mesta;Vzdialenost_km;Trvanie\n";
+            tripHistory.forEach(r => csv += `"${r.date}";"${r.from}";"${r.to}";${r.km};${r.time}\n`);
             const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
-            link.download = `kniha_jazd.csv`;
+            link.download = `kniha_jazd_export.csv`;
             link.click();
         }
-        function clearLogs() { if(confirm("Zmazať?")) { tripHistory = []; localStorage.removeItem('tripHistory'); renderHistory(); } }
+
+        function clearLogs() { if(confirm("Vymazať?")) { tripHistory = []; localStorage.removeItem('tripHistory'); renderHistory(); } }
         renderHistory();
     </script>
 </body>
