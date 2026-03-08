@@ -15,7 +15,7 @@
 
     <div class="max-w-md mx-auto">
         <h1 class="text-2xl font-bold mb-6 text-blue-400 flex justify-between items-center">
-            🚗 Kniha  Jázd 
+            🚗 Kniha Jázd 
             <span id="badge" class="text-[10px] bg-slate-700 text-white px-2 py-1 rounded-full uppercase tracking-widest">Pripravený</span>
         </h1>
 
