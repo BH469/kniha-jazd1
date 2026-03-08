@@ -1,0 +1,206 @@
+
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Kniha Jázd PRO + GPS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { -webkit-tap-highlight-color: transparent; }
+        .active-pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+    </style>
+</head>
+<body class="bg-slate-900 text-white font-sans min-h-screen p-4 pb-20">
+
+    <div class="max-w-md mx-auto">
+        <h1 class="text-2xl font-bold mb-6 text-blue-400 flex justify-between items-center">
+            🚗 Kniha Jázd 
+            <span id="badge" class="text-[10px] bg-slate-700 text-white px-2 py-1 rounded-full uppercase tracking-widest">Pripravený</span>
+        </h1>
+
+        <!-- Nastavenia vozidla -->
+        <div class="bg-slate-800 p-4 rounded-2xl mb-4 border border-slate-700 shadow-lg">
+            <h2 class="text-xs font-semibold text-slate-400 mb-3 uppercase tracking-wider">Nastavenia & Tankovanie</h2>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="text-[10px] text-slate-500 uppercase">Spotreba (l/100km)</label>
+                    <input type="number" id="avgConsumption" value="6.5" step="0.1" class="w-full bg-slate-700 border-none rounded-lg p-2 text-white outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="text-[10px] text-slate-500 uppercase">Cena PHM (€/l)</label>
+                    <input type="number" id="fuelPrice" value="1.60" step="0.01" class="w-full bg-slate-700 border-none rounded-lg p-2 text-white outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="text-[10px] text-slate-500 uppercase">Stav tachometra (km)</label>
+                    <input type="number" id="odo" placeholder="125000" class="w-full bg-slate-700 border-none rounded-lg p-2 text-white outline-none">
+                </div>
+                <div>
+                    <label class="text-[10px] text-slate-500 uppercase">Natankované (l)</label>
+                    <input type="number" id="refuelLiters" placeholder="0" class="w-full bg-slate-700 border-none rounded-lg p-2 text-orange-400 outline-none">
+                </div>
+            </div>
+        </div>
+
+        <!-- Hlavný panel -->
+        <div class="bg-slate-800 p-6 rounded-3xl shadow-2xl border border-slate-700 text-center mb-6">
+            <div id="timer" class="text-xl font-mono text-slate-400 mb-1">00:00:00</div>
+            <div id="distance" class="text-7xl font-black text-white leading-none">0.0</div>
+            <div class="text-slate-500 mt-2 uppercase tracking-widest text-[10px]">Aktuálne kilometre</div>
+            <div id="addrDisplay" class="text-[10px] text-blue-300 mt-4 italic truncate">📍 Čakám na GPS...</div>
+        </div>
+
+        <!-- Ovládanie -->
+        <div class="grid grid-cols-1 gap-4 mb-6">
+            <button id="startBtn" onclick="startTrip()" class="bg-blue-600 hover:bg-blue-500 py-5 rounded-2xl font-bold text-xl shadow-lg active:scale-95 transition-all">
+                ▶ ZAČAŤ JAZDU
+            </button>
+            <button id="stopBtn" onclick="stopTrip()" class="hidden bg-red-600 hover:bg-red-500 py-5 rounded-2xl font-bold text-xl shadow-lg active:scale-95 transition-all">
+                🛑 KONIEC JAZDY
+            </button>
+        </div>
+
+        <!-- Export & Akcie -->
+        <div class="flex gap-2 mb-8">
+            <button onclick="exportToCSV()" class="flex-1 bg-slate-700 hover:bg-slate-600 py-3 rounded-xl text-sm font-medium transition-colors">📥 Export CSV</button>
+            <button onclick="clearLogs()" class="bg-slate-800 hover:bg-red-900/30 border border-slate-700 py-3 px-4 rounded-xl text-sm text-red-400 transition-colors">Vymazať</button>
+        </div>
+
+        <!-- História -->
+        <div id="historyList" class="space-y-2">
+            <h3 class="text-slate-500 text-xs font-bold uppercase mb-2 px-1">Posledné záznamy</h3>
+        </div>
+    </div>
+
+    <script>
+        let watchId = null, startTime = null, timerInterval = null;
+        let totalDistance = 0, lastCoords = null;
+        let startAddress = "Neznáme", endAddress = "Neznáme";
+        let tripHistory = JSON.parse(localStorage.getItem('tripHistory')) || [];
+
+        async function getAddress(lat, lon) {
+            try {
+                const res = await fetch(`https://nominatim.openstreetmap.org{lat}&lon=${lon}&zoom=18`, {
+                    headers: { 'User-Agent': 'KnihaJazdApp/1.0' }
+                });
+                const data = await res.json();
+                return data.display_name || `${lat}, ${lon}`;
+            } catch (e) { return `${lat}, ${lon}`; }
+        }
+
+        function updateTimer() {
+            const diff = new Date(new Date() - startTime);
+            document.getElementById('timer').innerText = diff.toISOString().substr(11, 8);
+        }
+
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+
+        async function startTrip() {
+            if (!navigator.geolocation) return alert("GPS nie je dostupné.");
+            
+            startTime = new Date();
+            totalDistance = 0;
+            lastCoords = null;
+            document.getElementById('distance').innerText = "0.0";
+            
+            toggleUI(true);
+            timerInterval = setInterval(updateTimer, 1000);
+
+            navigator.geolocation.getCurrentPosition(async p => {
+                startAddress = await getAddress(p.coords.latitude, p.coords.longitude);
+                document.getElementById('addrDisplay').innerText = `📍 Odchod: ${startAddress}`;
+            });
+
+            watchId = navigator.geolocation.watchPosition(p => {
+                if (lastCoords) {
+                    const d = calculateDistance(lastCoords.lat, lastCoords.lon, p.coords.latitude, p.coords.longitude);
+                    if (d > 0.008) { 
+                        totalDistance += d;
+                        document.getElementById('distance').innerText = totalDistance.toFixed(2);
+                    }
+                }
+                lastCoords = { lat: p.coords.latitude, lon: p.coords.longitude };
+            }, null, { enableHighAccuracy: true });
+        }
+
+        async function stopTrip() {
+            clearInterval(timerInterval);
+            navigator.geolocation.clearWatch(watchId);
+            
+            if (lastCoords) endAddress = await getAddress(lastCoords.lat, lastCoords.lon);
+
+            const consumption = parseFloat(document.getElementById('avgConsumption').value) || 0;
+            const price = parseFloat(document.getElementById('fuelPrice').value) || 0;
+            const cost = (totalDistance * (consumption / 100) * price).toFixed(2);
+
+            const record = {
+                date: new Date().toLocaleString('sk-SK'),
+                start: startAddress,
+                end: endAddress,
+                km: totalDistance.toFixed(2),
+                duration: document.getElementById('timer').innerText,
+                cost: cost,
+                odo: document.getElementById('odo').value || "-",
+                refuel: document.getElementById('refuelLiters').value || "0"
+            };
+
+            tripHistory.push(record);
+            localStorage.setItem('tripHistory', JSON.stringify(tripHistory));
+            
+            renderHistory();
+            toggleUI(false);
+            alert(`Jazda ukončená v: ${endAddress}\nPrejdené: ${totalDistance.toFixed(2)} km`);
+        }
+
+        function toggleUI(isRunning) {
+            document.getElementById('startBtn').classList.toggle('hidden', isRunning);
+            document.getElementById('stopBtn').classList.toggle('hidden', !isRunning);
+            const b = document.getElementById('badge');
+            b.innerText = isRunning ? "V pohybe" : "Pripravený";
+            b.className = isRunning ? "text-[10px] bg-green-600 text-white px-2 py-1 rounded-full active-pulse uppercase tracking-widest" : "text-[10px] bg-slate-700 text-white px-2 py-1 rounded-full uppercase tracking-widest";
+        }
+
+        function renderHistory() {
+            const container = document.getElementById('historyList');
+            container.innerHTML = '<h3 class="text-slate-500 text-xs font-bold uppercase mb-2 px-1">Posledné záznamy</h3>';
+            tripHistory.slice().reverse().slice(0, 5).forEach(item => {
+                const div = document.createElement('div');
+                div.className = "bg-slate-800 p-3 rounded-xl border border-slate-700 text-[11px] mb-2";
+                div.innerHTML = `
+                    <div class="flex justify-between font-bold text-blue-400 mb-1">
+                        <span>${item.date}</span>
+                        <span>${item.km} km (${item.cost} €)</span>
+                    </div>
+                    <div class="text-slate-400 truncate">Z: ${item.start}</div>
+                    <div class="text-slate-400 truncate">Do: ${item.end}</div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function exportToCSV() {
+            if (tripHistory.length === 0) return alert("Prázdna história.");
+            let csv = "Datum;Start_Miesto;Ciel_Miesto;Vzdialenost_km;Trvanie;Naklady_EUR;Tachometer_km;Natankovane_l\n";
+            tripHistory.forEach(r => {
+                csv += `"${r.date}";"${r.start}";"${r.end}";${r.km};${r.duration};${r.cost};${r.odo};${r.refuel}\n`;
+            });
+            const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `kniha_jazd_${new Date().toISOString().split('T')[0]}.csv`;
+            link.click();
+        }
+
+        function clearLogs() { if(confirm("Vymazať všetko?")) { tripHistory = []; localStorage.removeItem('tripHistory'); renderHistory(); } }
+
+        renderHistory();
+    </script>
+</body>
+</html>
