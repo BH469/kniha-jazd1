@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Kniha Jázd PRO</title>
+    <title>Kniha Jázd PRO v3</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { -webkit-tap-highlight-color: transparent; background-color: #0f172a; }
@@ -66,13 +66,12 @@
 
         <!-- Akcie a História -->
         <div class="flex gap-3 mb-10">
-            <button onclick="exportToCSV()" class="flex-1 bg-slate-700 hover:bg-slate-600 py-4 rounded-2xl text-xs font-bold uppercase tracking-wider transition-colors">📥 Export CSV</button>
+            <button onclick="exportToCSV()" class="flex-1 bg-slate-700 hover:bg-slate-600 py-4 rounded-2xl text-xs font-bold uppercase tracking-wider transition-colors font-bold">📥 Export CSV</button>
             <button onclick="clearLogs()" class="bg-slate-800 hover:bg-red-900/40 border border-slate-700 py-4 px-6 rounded-2xl text-xs text-red-500 transition-colors font-bold uppercase">Zmazať</button>
         </div>
 
         <div id="historyList" class="space-y-3">
             <h3 class="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mb-4 px-1">Posledné jazdy</h3>
-            <!-- Dynamický obsah -->
         </div>
     </div>
 
@@ -82,19 +81,34 @@
         let startAddr = "Neznáme", endAddr = "Neznáme";
         let tripHistory = JSON.parse(localStorage.getItem('tripHistory')) || [];
 
-        // --- FUNKCIA PRE PREKLAD GPS NA ADRESU (MESTO) ---
+        // --- VYLEPŠENÁ FUNKCIA PRE PREKLAD GPS NA ADRESU ---
         async function fetchCity(lat, lon) {
             try {
-                const res = await fetch(`https://nominatim.openstreetmap.org{lat}&lon=${lon}&zoom=14`, {
-                    headers: { 'User-Agent': 'KnihaJazdApp/1.1' }
+                // Pridanie náhodného parametra zabráni iPhonu použiť starú cache
+                const url = `https://nominatim.openstreetmap.org{lat}&lon=${lon}&zoom=16&addressdetails=1&cb=${Date.now()}`;
+                
+                const res = await fetch(url, {
+                    headers: { 
+                        'Accept-Language': 'sk-SK,sk;q=0.9',
+                        'User-Agent': 'KnihaJazd_v3_iPhone'
+                    }
                 });
+                
                 const data = await res.json();
-                // Priorita: Mesto -> Obec -> Dedina -> Okres
-                const addr = data.address;
-                const place = addr.city || addr.town || addr.village || addr.municipality || addr.suburb || "Neznáme miesto";
-                const road = addr.road ? addr.road + ", " : "";
-                return road + place;
+                
+                if (data && data.address) {
+                    const a = data.address;
+                    // Hľadáme najlepší názov miesta
+                    const mesto = a.city || a.town || a.village || a.municipality || a.hamlet || a.suburb || "";
+                    const ulica = a.road || "";
+                    
+                    if (ulica || mesto) {
+                        return ulica && mesto ? `${ulica}, ${mesto}` : (ulica || mesto);
+                    }
+                }
+                return `${lat.toFixed(3)}, ${lon.toFixed(3)}`; 
             } catch (e) { 
+                console.error("Geocoding error", e);
                 return `${lat.toFixed(3)}, ${lon.toFixed(3)}`; 
             }
         }
@@ -119,22 +133,23 @@
             totalDistance = 0;
             lastCoords = null;
             document.getElementById('distance').innerText = "0.0";
-            document.getElementById('locationDisplay').innerText = "📍 Vyhľadávam štartovacie miesto...";
+            document.getElementById('locationDisplay').innerText = "📍 Lokalizujem štart...";
             
             toggleUI(true);
             timerInterval = setInterval(updateTimer, 1000);
 
-            // Získanie štartovacej adresy
             navigator.geolocation.getCurrentPosition(async p => {
                 startAddr = await fetchCity(p.coords.latitude, p.coords.longitude);
                 document.getElementById('locationDisplay').innerText = `Odchod: ${startAddr}`;
-            });
+                lastCoords = { lat: p.coords.latitude, lon: p.coords.longitude };
+            }, err => {
+                document.getElementById('locationDisplay').innerText = "📍 Chyba GPS signálu";
+            }, { enableHighAccuracy: true });
 
-            // Sledovanie pohybu
             watchId = navigator.geolocation.watchPosition(p => {
                 if (lastCoords) {
                     const d = getDist(lastCoords.lat, lastCoords.lon, p.coords.latitude, p.coords.longitude);
-                    if (d > 0.01) { // Filter: pohyb aspoň 10 metrov
+                    if (d > 0.008) { 
                         totalDistance += d;
                         document.getElementById('distance').innerText = totalDistance.toFixed(2);
                     }
@@ -147,7 +162,7 @@
             clearInterval(timerInterval);
             navigator.geolocation.clearWatch(watchId);
             
-            document.getElementById('locationDisplay').innerText = "📍 Vyhľadávam cieľové miesto...";
+            document.getElementById('locationDisplay').innerText = "📍 Lokalizujem cieľ...";
             
             if (lastCoords) {
                 endAddr = await fetchCity(lastCoords.lat, lastCoords.lon);
@@ -173,8 +188,8 @@
             
             renderHistory();
             toggleUI(false);
-            document.getElementById('locationDisplay').innerText = "📍 Jazda úspešne uložená.";
-            alert(`Jazda ukončená!\nZ: ${startAddr}\nDo: ${endAddr}\nNajazdené: ${totalDistance.toFixed(2)} km`);
+            document.getElementById('locationDisplay').innerText = `Cieľ: ${endAddr}`;
+            alert(`Jazda ukončená v ${endAddr}`);
         }
 
         function toggleUI(on) {
@@ -188,9 +203,9 @@
         function renderHistory() {
             const container = document.getElementById('historyList');
             container.innerHTML = '<h3 class="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mb-4 px-1">Posledné jazdy</h3>';
-            tripHistory.slice().reverse().slice(0, 5).forEach(item => {
+            tripHistory.slice().reverse().slice(0, 10).forEach(item => {
                 const div = document.createElement('div');
-                div.className = "bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50 text-[11px]";
+                div.className = "bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50 text-[11px] mb-2";
                 div.innerHTML = `
                     <div class="flex justify-between items-start mb-2">
                         <span class="text-slate-400 font-bold">${item.date}</span>
